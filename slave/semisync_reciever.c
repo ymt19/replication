@@ -15,11 +15,12 @@ void semisync_udp_coop_reciever(int slave_id);
 
 void semisync_reciever(int slave_id) {
     #if TCP
-    semisync_tcp_reciever(slave_id));
+    semisync_tcp_reciever(slave_id);
     #elif NONCOOP
+    printf("udp noncoop reciever\n");
     semisync_udp_noncoop_reciever(slave_id);
     #elif COOP
-    semisync_udp_coop_reciever(slave_id));
+    semisync_udp_coop_reciever(slave_id);
     #endif
 }
 
@@ -45,14 +46,16 @@ void semisync_udp_noncoop_reciever(int slave_id) {
     udp_cl_socket_init(&udp_cl_info, 0, errmsg);
     udp_sv_socket_init(&udp_sv_info, my_port, 0, errmsg);
 
-    for (int i = 0; i < 10; i++) {        
+    int cnt = 0;
+    while(1) {
+        cnt++;
         recv_msg_len = udp_sv_recieve_msg(&udp_sv_info,
                                           recv_msg,
                                           BUFSIZ,
                                           errmsg);
         printf("%s\n", recv_msg);
 
-        sprintf(send_msg, "[ack]slave%d->master count%d", slave_id, i);
+        sprintf(send_msg, "[ack]slave%d->master count%d", slave_id, cnt);
         send_msg_len = strlen(send_msg);
         udp_cl_send_msg(&udp_cl_info,
                         send_msg,

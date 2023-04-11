@@ -17,10 +17,10 @@ int main(int argc, char *argv[]) {
 
     // reciever起動
     #if REPLICATION == ASYNC
-    printf("Asynchronous replication...\n");
+    printf("Asynchronous replication... %d\n", slave_id);
     async_reciever(slave_id);
     #elif REPLICATION == SEMISYNC
-    printf("SEMIsynchronous replication...\n");
+    printf("SEMIsynchronous replication...%d\n", slave_id);
     semisync_reciever(slave_id);
     #endif
 }

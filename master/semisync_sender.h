@@ -1,3 +1,5 @@
 #pragma once
 
-void semisync_sender();
+#include "../utils/config.h"
+
+void *semisync_sender(Config *config);

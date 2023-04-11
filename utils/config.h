@@ -6,8 +6,11 @@
 
 struct Config {
     int finish_flag;
+    double exp_time;
+    double start_time;
 };
 typedef struct Config Config;
 
+Config *create_config(double exp_time);
 int get_master_port();
 int get_slave_port(int);
