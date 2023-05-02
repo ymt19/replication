@@ -2,10 +2,14 @@
 
 #include <stdlib.h>
 
-Config *create_config(double exp_time) {
-    Config *config = malloc(sizeof(Config));
+config_t *master_config_init(double exp_time) {
+    config_t *config = malloc(sizeof(config_t));
     config->finish_flag = 0;
     config->exp_time = exp_time;
+
+    config->tx_log_info = tx_log_info_init("tx_log.csv");
+
+    return config;
 }
 
 int get_master_port(int slave_id) {

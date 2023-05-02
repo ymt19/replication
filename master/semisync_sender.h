@@ -2,4 +2,4 @@
 
 #include "../utils/config.h"
 
-void *semisync_sender(Config *config);
+void *semisync_sender(config_t *config);

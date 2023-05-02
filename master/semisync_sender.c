@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <pthread.h>
 
 #include "../master/semisync_sender.h"
@@ -11,7 +12,7 @@
 #include "../utils/config.h"
 
 struct sender_thread_info_t {
-    Config *config;
+    config_t *config;
     int connection_slave_id;
 };
 typedef struct sender_thread_info_t sender_thread_info_t;
@@ -19,7 +20,7 @@ typedef struct sender_thread_info_t sender_thread_info_t;
 void *semisync_tcp_sender(sender_thread_info_t *arg);
 void *semisync_udp_sender(sender_thread_info_t *arg);
 
-void *semisync_sender(Config *config) {
+void *semisync_sender(config_t *config) {
     int ret;
     pthread_t sender_thread[SLAVE_NODE_NUM];
     sender_thread_info_t *sender_thread_info;
@@ -109,6 +110,7 @@ void *semisync_udp_sender(sender_thread_info_t *arg) {
                                           BUFSIZ,
                                           errmsg);
         printf("%s\n", recv_msg);
+        sleep(1);
     }
     printf("semisync sender finish%d\n", arg->connection_slave_id);
 

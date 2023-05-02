@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <unistd.h>
 
+#include "../log/tx_log.h"
 #include "../master/async_sender.h"
 #include "../master/semisync_sender.h"
 #include "../utils/config.h"
@@ -14,7 +16,8 @@
 
 struct client_thread_info_t {
     unsigned short client_id;
-    Config *config;
+    config_t *config;
+    tx_log_info_t *tx_log_info;
 };
 typedef struct client_thread_info_t client_thread_info_t;
 
@@ -22,7 +25,7 @@ void *client(client_thread_info_t *info);
 
 int main(int argc, char *argv[]) {
     int ret;
-    Config *config;
+    config_t *config;
     double exp_time;
     pthread_t sender_main_thread;
     pthread_t client_thread[CLIENT_THREAD_NUM];
@@ -34,7 +37,7 @@ int main(int argc, char *argv[]) {
     }
     exp_time = atoi(argv[1]);
 
-    config = create_config(exp_time);
+    config = master_config_init(exp_time);
 
 
     // sender起動
@@ -97,11 +100,13 @@ int main(int argc, char *argv[]) {
 }
 
 void *client(client_thread_info_t *info) {
-    Config *config = info->config;
-    unsigned short client_id = info->client_id;
+    config_t *config = info->config;
+    tx_log_info_t *tx_log_info = info->config->tx_log_info;
+    int client_id = info->client_id;
 
     printf("client%d\n", client_id);
     while (config->start_time + config->exp_time > get_time()) {
-        
+        tx_log_append(tx_log_info);
+        sleep(1);
     }
 }

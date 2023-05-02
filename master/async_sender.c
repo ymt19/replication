@@ -1,8 +1,9 @@
 #include <stdio.h>
 
 #include "../master/async_sender.h"
+#include "../utils/config.h"
 
-void async_sender() {
+void *async_sender(config_t *config) {
     for (int i = 0; i < SLAVE_NODE_NUM; i++) {
         #if TCP
             printf("TCP%d\n", i);
@@ -12,5 +13,4 @@ void async_sender() {
             printf("NOCOOP%d\n", i);
         #endif
     }
-    return;
 }
