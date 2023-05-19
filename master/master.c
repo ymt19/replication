@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
     }
     exp_time = atoi(argv[1]);
 
-    config = master_config_init(exp_time);
+    config = config_init(exp_time, "master_tx_log.csv");
 
 
     // sender起動
@@ -89,12 +89,14 @@ int main(int argc, char *argv[]) {
     }
 
     // client終了後，終了フラグを立てる
-    config->finish_flag = 1;
+    config_raise_finish_flag(config);
 
     ret = pthread_join(sender_main_thread, NULL);
     if (ret != 0) {
         exit(1);
     }
+
+    config_destroy(config);
 
     return 0;
 }
@@ -103,10 +105,23 @@ void *client(client_thread_info_t *info) {
     config_t *config = info->config;
     tx_log_info_t *tx_log_info = info->config->tx_log_info;
     int client_id = info->client_id;
+    int tx_id;
+    double call_time;
+    double response_time;
 
     printf("client%d\n", client_id);
     while (config->start_time + config->exp_time > get_time()) {
-        tx_log_append(tx_log_info);
+        call_time = get_time() - config->start_time;
+        tx_id = tx_log_append(tx_log_info);
+
+        #if REPLICATION == SEMISYNC
+        for (int client_id = 0; client_id < SLAVE_NODE_NUM; client_id++) {
+            while(!(config_get_sent_lsn(config, client_id) >= tx_id)) {}
+        }
+        #endif
+        response_time = get_time() - config->start_time;
+        
+        printf("[response] clientid:%d, txid:%d, call:%lf, response:%lf\n", client_id, tx_id, call_time, response_time);
         sleep(1);
     }
 }

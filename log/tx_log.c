@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../log/tx_log.h"
+#include "../utils/config.h"
 
 tx_log_info_t *tx_log_info_init(char *filename) {
     tx_log_info_t *tx_log_info;
@@ -11,7 +12,7 @@ tx_log_info_t *tx_log_info_init(char *filename) {
     
     strcpy(tx_log_info->filename, filename);
     pthread_mutex_init(&tx_log_info->ltid_mutex, NULL);
-    tx_log_info->latest_tx_id = -1;
+    tx_log_info->latest_tx_id = MIN_LSN - 1;
 
     // ファイル削除
     remove(tx_log_info->filename);
@@ -29,18 +30,20 @@ void tx_log_info_destroy(tx_log_info_t *tx_log_info) {
  * 
  * @return int 作成したtxのid 
  */
-void tx_log_append(tx_log_info_t *tx_log_info) {
+int tx_log_append(tx_log_info_t *tx_log_info) {
+    int new_tx_id;
     pthread_mutex_lock(&tx_log_info->ltid_mutex);
-    printf("start\n");
-    printf("%d\n", ++tx_log_info->latest_tx_id);
-    printf("end\n");
+    tx_log_info->latest_tx_id++;
+    printf("add txid:%d\n", tx_log_info->latest_tx_id);
+    new_tx_id = tx_log_info->latest_tx_id;
     pthread_mutex_unlock(&tx_log_info->ltid_mutex);
+    return new_tx_id;
 }
 
-void tx_log_write(tx_log_info_t *tx_log_info, tx_t tx) {
-
-}
-
-void tx_log_read(tx_log_info_t *tx_log_info, tx_t *tx, int tx_id) {
-    printf("2\n");
+int tx_log_get_ltid(tx_log_info_t *tx_log_info) {
+    int ret;
+    pthread_mutex_lock(&tx_log_info->ltid_mutex);
+    ret = tx_log_info->latest_tx_id;
+    pthread_mutex_unlock(&tx_log_info->ltid_mutex);
+    return ret;
 }

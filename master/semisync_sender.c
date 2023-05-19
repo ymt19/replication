@@ -58,9 +58,6 @@ void *semisync_sender(config_t *config) {
         #endif
     }
 
-    // clientに通知
-
-
     for (int slave_id = 0; slave_id < SLAVE_NODE_NUM; slave_id++) {
         ret = pthread_join(sender_thread[slave_id], NULL);
         if (ret != 0) {
@@ -76,6 +73,8 @@ void *semisync_tcp_sender(sender_thread_info_t *arg) {
 }
 
 void *semisync_udp_sender(sender_thread_info_t *arg) {
+    config_t *config = arg->config;
+    tx_log_info_t *tx_log_info = config->tx_log_info;
     int my_port;
     int connection_slave_port;
     // char connection_slave_ipaddr[32];
@@ -93,24 +92,32 @@ void *semisync_udp_sender(sender_thread_info_t *arg) {
     udp_cl_socket_init(&udp_cl_info, 0, errmsg);
     udp_sv_socket_init(&udp_sv_info, my_port, 0, errmsg);
 
-    int cnt = 0;
-    while(!(arg->config->finish_flag)) {
-        cnt++;
-        sprintf(send_msg, "[msg]master->replica%d count%d", arg->connection_slave_id, cnt);
-        send_msg_len = strlen(send_msg);
-        udp_cl_send_msg(&udp_cl_info,
-                        send_msg,
-                        send_msg_len,
-                        LOCAL_IPADDR,
-                        connection_slave_port,
-                        errmsg);
-        
-        recv_msg_len = udp_sv_recieve_msg(&udp_sv_info,
-                                          recv_msg,
-                                          BUFSIZ,
-                                          errmsg);
-        printf("%s\n", recv_msg);
-        sleep(1);
+    int latest_lsn, sent_lsn;
+    while(!config_get_finish_flag(config)) {
+        latest_lsn = tx_log_get_ltid(tx_log_info);
+        sent_lsn = config_get_sent_lsn(config, arg->connection_slave_id);
+        if (latest_lsn > sent_lsn) {
+            // lsn[sent_lsn+1]をslaveに送信
+
+            sprintf(send_msg, "[msg]master->replica%d lsn%d", arg->connection_slave_id, sent_lsn+1);
+            send_msg_len = strlen(send_msg);
+            printf("[send] %s\n", send_msg);
+            udp_cl_send_msg(&udp_cl_info,
+                            send_msg,
+                            send_msg_len,
+                            LOCAL_IPADDR,
+                            connection_slave_port,
+                            errmsg);
+            
+            recv_msg_len = udp_sv_recieve_msg(&udp_sv_info,
+                                            recv_msg,
+                                            BUFSIZ,
+                                            errmsg);
+            printf("%s\n", recv_msg);
+
+            // ACK受信後、sent_lsnをインクリメント
+            config_set_sent_lsn(config, arg->connection_slave_id, sent_lsn+1);
+        }
     }
     printf("semisync sender finish%d\n", arg->connection_slave_id);
 
