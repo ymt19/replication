@@ -8,6 +8,7 @@
 #include "../network/udp/udp_client.h"
 #include "../network/udp/udp_server.h"
 #include "../utils/config.h"
+#include "../utils/message.h"
 
 void semisync_tcp_reciever(int slave_id);
 void semisync_udp_noncoop_reciever(int slave_id);
@@ -46,23 +47,28 @@ void semisync_udp_noncoop_reciever(int slave_id) {
     udp_cl_socket_init(&udp_cl_info, 0, errmsg);
     udp_sv_socket_init(&udp_sv_info, my_port, 0, errmsg);
 
-    int cnt = 0;
+    int seq_num;
+    message_enum message_type;
     while(1) {
-        cnt++;
         recv_msg_len = udp_sv_recieve_msg(&udp_sv_info,
                                           recv_msg,
                                           BUFSIZ,
                                           errmsg);
-        printf("%s\n", recv_msg);
+        message_type = identify_message_types(recv_msg);
+        if (message_type == E_LOG) {
+            int seq_num;
+            char log_data[BUFSIZ];
+            seq_num = get_info_from_log_msg(recv_msg, log_data);
+            printf("[recv msg] seq_num: %d, log: %s\n", seq_num, log_data);
 
-        sprintf(send_msg, "[ack]slave%d->master count%d", slave_id, cnt);
-        send_msg_len = strlen(send_msg);
-        udp_cl_send_msg(&udp_cl_info,
+            send_msg_len = create_log_ack_msg(send_msg, seq_num);
+            udp_cl_send_msg(&udp_cl_info,
                         send_msg,
                         send_msg_len,
                         LOCAL_IPADDR,
                         master_port,
                         errmsg);
+        }
     }
 
     udp_cl_socket_deinit(&udp_cl_info);

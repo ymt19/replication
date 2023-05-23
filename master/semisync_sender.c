@@ -10,6 +10,7 @@
 #include "../network/udp/udp_client.h"
 #include "../network/udp/udp_server.h"
 #include "../utils/config.h"
+#include "../utils/message.h"
 
 struct sender_thread_info_t {
     config_t *config;
@@ -92,16 +93,22 @@ void *semisync_udp_sender(sender_thread_info_t *arg) {
     udp_cl_socket_init(&udp_cl_info, 0, errmsg);
     udp_sv_socket_init(&udp_sv_info, my_port, 0, errmsg);
 
-    int latest_lsn, sent_lsn;
+    int seq_num = 0;    // 送信パケットを表すsequence number
+    char log_data[BUFSIZ];
+    message_enum message_type;
+    int ack_seq_num;
+    int latest_lsn;     // 生成済み最新lsn
+    int sent_lsn;       // 送信済みlsn
     while(!config_get_finish_flag(config)) {
         latest_lsn = tx_log_get_ltid(tx_log_info);
         sent_lsn = config_get_sent_lsn(config, arg->connection_slave_id);
         if (latest_lsn > sent_lsn) {
             // lsn[sent_lsn+1]をslaveに送信
+            seq_num++;
 
-            sprintf(send_msg, "[msg]master->replica%d lsn%d", arg->connection_slave_id, sent_lsn+1);
-            send_msg_len = strlen(send_msg);
-            printf("[send] %s\n", send_msg);
+            sprintf(log_data, "master->replica%d lsn%d", arg->connection_slave_id, sent_lsn+1);
+            send_msg_len = create_log_msg(send_msg, seq_num, log_data, strlen(log_data));
+            printf("[send log] %s\n", log_data);
             udp_cl_send_msg(&udp_cl_info,
                             send_msg,
                             send_msg_len,
@@ -113,7 +120,11 @@ void *semisync_udp_sender(sender_thread_info_t *arg) {
                                             recv_msg,
                                             BUFSIZ,
                                             errmsg);
-            printf("%s\n", recv_msg);
+            message_type = identify_message_types(recv_msg);
+            if (message_type == E_LOG_ACK) {
+                ack_seq_num = get_info_from_log_ack_msg(recv_msg);
+                printf("[ack] seq num: %d\n", ack_seq_num);
+            }
 
             // ACK受信後、sent_lsnをインクリメント
             config_set_sent_lsn(config, arg->connection_slave_id, sent_lsn+1);
