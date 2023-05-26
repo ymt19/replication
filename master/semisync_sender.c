@@ -9,6 +9,8 @@
 #include "../network/tcp/tcp_server.h"
 #include "../network/udp/udp_client.h"
 #include "../network/udp/udp_server.h"
+#include "../utils/rto.h"
+#include "../utils/timer.h"
 #include "../utils/config.h"
 #include "../utils/message.h"
 
@@ -91,43 +93,45 @@ void *semisync_udp_sender(sender_thread_info_t *arg) {
     my_port = get_master_port(arg->connection_slave_id);
     connection_slave_port = get_slave_port(arg->connection_slave_id);
     udp_cl_socket_init(&udp_cl_info, 0, errmsg);
-    udp_sv_socket_init(&udp_sv_info, my_port, 0, errmsg);
+    udp_sv_socket_init(&udp_sv_info, my_port, 1, errmsg);
 
-    int seq_num = 0;    // 送信パケットを表すsequence number
-    char log_data[BUFSIZ];
+    char try_sending_log_data[BUFSIZ];
     message_enum message_type;
-    int ack_seq_num;
-    int latest_lsn;     // 生成済み最新lsn
-    int sent_lsn;       // 送信済みlsn
+    int try_sending_lsn = 0;        // 送信中のlsn
+    int transmission_cnt = 0;   // 再送回数
+    int ack_lsn;
+    double first_sent_time;
     while(!config_get_finish_flag(config)) {
-        latest_lsn = tx_log_get_ltid(tx_log_info);
-        sent_lsn = config_get_sent_lsn(config, arg->connection_slave_id);
-        if (latest_lsn > sent_lsn) {
-            // lsn[sent_lsn+1]をslaveに送信
-            seq_num++;
-
-            sprintf(log_data, "master->replica%d lsn%d", arg->connection_slave_id, sent_lsn+1);
-            send_msg_len = create_log_msg(send_msg, seq_num, log_data, strlen(log_data));
-            printf("[send log] %s\n", log_data);
-            udp_cl_send_msg(&udp_cl_info,
-                            send_msg,
-                            send_msg_len,
-                            LOCAL_IPADDR,
-                            connection_slave_port,
-                            errmsg);
-            
-            recv_msg_len = udp_sv_recieve_msg(&udp_sv_info,
-                                            recv_msg,
-                                            BUFSIZ,
-                                            errmsg);
+        recv_msg_len = udp_sv_recieve_msg(&udp_sv_info, recv_msg, BUFSIZ, errmsg);
+        if (recv_msg_len > 0) {
             message_type = identify_message_types(recv_msg);
-            if (message_type == E_LOG_ACK) {
-                ack_seq_num = get_info_from_log_ack_msg(recv_msg);
-                printf("[ack] seq num: %d\n", ack_seq_num);
-            }
+            if (message_type = E_LOG_ACK) {
+                ack_lsn = get_info_from_log_ack_msg(recv_msg);
+                config_set_sent_lsn(config, arg->connection_slave_id, ack_lsn);
 
-            // ACK受信後、sent_lsnをインクリメント
-            config_set_sent_lsn(config, arg->connection_slave_id, sent_lsn+1);
+                try_sending_lsn = ack_lsn + 1;
+                transmission_cnt = 0;
+            } else {
+                // error処理
+            }
+        }
+
+        if (transmission_cnt > 0) {
+            if (check_rto(first_sent_time, transmission_cnt)) {
+                // retransmission
+                send_msg_len = create_log_msg(send_msg, try_sending_lsn, try_sending_log_data, strlen(try_sending_log_data));
+                udp_cl_send_msg(&udp_cl_info, send_msg, send_msg_len, LOCAL_IPADDR, connection_slave_port, errmsg);
+                transmission_cnt++;
+            }
+        } else {
+            if (tx_log_get_ltid(tx_log_info) > try_sending_lsn) {
+                // first transmission
+                sprintf(try_sending_log_data, "master->replica%d lsn%d", arg->connection_slave_id, try_sending_lsn);
+                send_msg_len = create_log_msg(send_msg, try_sending_lsn, try_sending_log_data, strlen(try_sending_log_data));
+                udp_cl_send_msg(&udp_cl_info, send_msg, send_msg_len, LOCAL_IPADDR, connection_slave_port, errmsg);
+                first_sent_time = get_time();
+                transmission_cnt++;
+            }
         }
     }
     printf("semisync sender finish%d\n", arg->connection_slave_id);
